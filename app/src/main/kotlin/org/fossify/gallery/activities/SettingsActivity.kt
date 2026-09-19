@@ -59,6 +59,7 @@ class SettingsActivity : SimpleActivity() {
         setupFileLoadingPriority()
         setupManageIncludedFolders()
         setupManageExcludedFolders()
+        setupManageNavigationRoots()
         setupManageHiddenFolders()
         setupSearchAllFiles()
         setupShowHiddenItems()
@@ -220,6 +221,24 @@ class SettingsActivity : SimpleActivity() {
         binding.settingsManageExcludedFoldersHolder.setOnClickListener {
             handleExcludedFolderPasswordProtection {
                 startActivity(Intent(this, ExcludedFoldersActivity::class.java))
+            }
+        }
+    }
+
+    private fun setupManageNavigationRoots() {
+        if (isRPlus() && !isExternalStorageManager()) {
+            val title = getString(R.string.manage_navigation_roots)
+            binding.settingsManageNavigationRoots.text =
+                "$title (${getString(org.fossify.commons.R.string.no_permission)})"
+        } else {
+            binding.settingsManageNavigationRoots.setText(R.string.manage_navigation_roots)
+        }
+
+        binding.settingsManageNavigationRootsHolder.setOnClickListener {
+            if (isRPlus() && !isExternalStorageManager()) {
+                GrantAllFilesDialog(this)
+            } else {
+                startActivity(Intent(this, NavigationRootsActivity::class.java))
             }
         }
     }
@@ -914,6 +933,7 @@ class SettingsActivity : SimpleActivity() {
                 put(USE_24_HOUR_FORMAT, config.use24HourFormat)
                 put(INCLUDED_FOLDERS, TextUtils.join(",", config.includedFolders))
                 put(EXCLUDED_FOLDERS, TextUtils.join(",", config.excludedFolders))
+                put(NAVIGATION_ROOTS, TextUtils.join(",", config.navigationRoots))
                 put(SHOW_HIDDEN_MEDIA, config.showHiddenMedia)
                 put(FILE_LOADING_PRIORITY, config.fileLoadingPriority)
                 put(AUTOPLAY_VIDEOS, config.autoplayVideos)
@@ -1060,6 +1080,7 @@ class SettingsActivity : SimpleActivity() {
                 USE_24_HOUR_FORMAT -> config.use24HourFormat = value.toBoolean()
                 INCLUDED_FOLDERS -> config.addIncludedFolders(value.toStringSet())
                 EXCLUDED_FOLDERS -> config.addExcludedFolders(value.toStringSet())
+                NAVIGATION_ROOTS -> config.addNavigationRoots(value.toStringSet())
                 SHOW_HIDDEN_MEDIA -> config.showHiddenMedia = value.toBoolean()
                 FILE_LOADING_PRIORITY -> config.fileLoadingPriority = value.toInt()
                 AUTOPLAY_VIDEOS -> config.autoplayVideos = value.toBoolean()

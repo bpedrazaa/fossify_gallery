@@ -8,6 +8,7 @@ import org.fossify.commons.helpers.isRPlus
 import org.fossify.commons.interfaces.RefreshRecyclerViewListener
 import org.fossify.gallery.R
 import org.fossify.gallery.adapters.ManageFoldersAdapter
+import org.fossify.gallery.adapters.ManageFoldersAdapter.FolderType
 import org.fossify.gallery.databinding.ActivityManageFoldersBinding
 import org.fossify.gallery.extensions.config
 
@@ -49,7 +50,7 @@ class ExcludedFoldersActivity : SimpleActivity(), RefreshRecyclerViewListener {
             text = placeholderText
         }
 
-        val adapter = ManageFoldersAdapter(this, folders, true, this, binding.manageFoldersList) {}
+        val adapter = ManageFoldersAdapter(this, folders, FolderType.EXCLUDED, this, binding.manageFoldersList) {}
         binding.manageFoldersList.adapter = adapter
     }
 

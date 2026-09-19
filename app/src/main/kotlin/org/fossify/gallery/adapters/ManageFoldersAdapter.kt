@@ -13,9 +13,13 @@ import org.fossify.gallery.databinding.ItemManageFolderBinding
 import org.fossify.gallery.extensions.config
 
 class ManageFoldersAdapter(
-    activity: BaseSimpleActivity, var folders: ArrayList<String>, val isShowingExcludedFolders: Boolean, val listener: RefreshRecyclerViewListener?,
+    activity: BaseSimpleActivity, var folders: ArrayList<String>, val folderType: FolderType, val listener: RefreshRecyclerViewListener?,
     recyclerView: MyRecyclerView, itemClick: (Any) -> Unit
 ) : MyRecyclerViewAdapter(activity, recyclerView, itemClick) {
+
+    enum class FolderType {
+        INCLUDED, EXCLUDED, NAVIGATION_ROOTS
+    }
 
     private val config = activity.config
 
@@ -115,10 +119,10 @@ class ManageFoldersAdapter(
 
         getSelectedItems().forEach {
             removeFolders.add(it)
-            if (isShowingExcludedFolders) {
-                config.removeExcludedFolder(it)
-            } else {
-                config.removeIncludedFolder(it)
+            when (folderType) {
+                FolderType.EXCLUDED -> config.removeExcludedFolder(it)
+                FolderType.INCLUDED -> config.removeIncludedFolder(it)
+                FolderType.NAVIGATION_ROOTS -> config.removeNavigationRoot(it)
             }
         }
 

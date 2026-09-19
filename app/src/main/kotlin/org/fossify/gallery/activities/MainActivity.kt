@@ -95,8 +95,10 @@ import org.fossify.gallery.extensions.getDirectorySortingValue
 import org.fossify.gallery.extensions.getDirsToShow
 import org.fossify.gallery.extensions.getDistinctPath
 import org.fossify.gallery.extensions.getFavoritePaths
+import org.fossify.gallery.extensions.getFolderNameFromPath
 import org.fossify.gallery.extensions.getNoMediaFoldersSync
 import org.fossify.gallery.extensions.getOTGFolderChildrenNames
+import org.fossify.gallery.extensions.getPathLocation
 import org.fossify.gallery.extensions.getSortedDirectories
 import org.fossify.gallery.extensions.handleExcludedFolderPasswordProtection
 import org.fossify.gallery.extensions.handleMediaManagementPrompt
@@ -180,6 +182,10 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
     // used at "Group direct subfolders" for navigating Up with the back button
     private var mOpenedSubfolders = arrayListOf("")
+
+    // used at "Navigation roots" for recursive drill-down into subfolders
+    private var mNavigationPrefix = ""
+    private var mNavigationHistory = arrayListOf("")
 
     private var mDateFormat = ""
     private var mTimeFormat = ""
@@ -396,6 +402,16 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         return if (binding.mainMenu.isSearchOpen) {
             binding.mainMenu.closeSearch()
             true
+        } else if (isNavigationRootsMode()) {
+            if (mNavigationPrefix.isEmpty()) {
+                appLockManager.lock()
+                false
+            } else {
+                mNavigationHistory.removeAt(mNavigationHistory.lastIndex)
+                mNavigationPrefix = mNavigationHistory.last()
+                setupAdapter(mDirs, "", forceRecreate = true)
+                true
+            }
         } else if (config.groupDirectSubfolders) {
             if (mCurrentPathPrefix.isEmpty()) {
                 appLockManager.lock()
@@ -1097,6 +1113,9 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         mIsGettingDirs = false
         mShouldStopFetching = false
 
+        // navigation roots mode reads mDirs while the folders are still being scanned
+        mDirs = newDirs
+
         // if hidden item showing is disabled but all Favorite items are hidden, hide the Favorites folder
         if (!config.shouldShowHidden) {
             val favoritesFolder = newDirs.firstOrNull { it.areFavorites() }
@@ -1480,12 +1499,22 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             .distinctBy { it.path.getDistinctPath() }
             .toMutableList() as ArrayList<Directory>
 
+        val navigationMode = isNavigationRootsMode()
         val sortedDirs = getSortedDirectories(distinctDirs)
-        var dirsToShow = getDirsToShow(
-            dirs = sortedDirs,
-            allDirs = mDirs,
-            currentPathPrefix = mCurrentPathPrefix
-        ).clone() as ArrayList<Directory>
+        var dirsToShow = if (navigationMode) {
+            getNavigationDirs(sortedDirs)
+        } else {
+            (getDirsToShow(
+                dirs = sortedDirs,
+                allDirs = mDirs,
+                currentPathPrefix = mCurrentPathPrefix
+            ).clone() as ArrayList<Directory>).also { list ->
+                list.forEach {
+                    it.isNavigationBranch = false
+                    it.isCurrentNavigationFolder = false
+                }
+            }
+        }
 
         if (currAdapter == null || forceRecreate) {
             mDirsIgnoringSearch = dirs
@@ -1498,17 +1527,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 isPickIntent(intent) || isGetAnyContentIntent(intent),
                 binding.directoriesRefreshLayout
             ) {
-                val clickedDir = it as Directory
-                val path = clickedDir.path
-                if (clickedDir.subfoldersCount == 1 || !config.groupDirectSubfolders) {
-                    if (path != config.tempFolderPath) {
-                        itemClicked(path)
-                    }
-                } else {
-                    mCurrentPathPrefix = path
-                    mOpenedSubfolders.add(path)
-                    setupAdapter(mDirs, "")
-                }
+                handleDirectoryClick(it as Directory)
             }.apply {
                 setupZoomListener(mZoomListener)
                 runOnUiThread {
@@ -1538,6 +1557,123 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         binding.directoriesGrid.postDelayed({
             binding.directoriesGrid.scrollBy(0, 0)
         }, 500)
+    }
+
+    private fun handleDirectoryClick(clickedDir: Directory) {
+        val path = clickedDir.path
+        when {
+            isNavigationRootsMode() && clickedDir.isNavigationBranch -> {
+                mNavigationPrefix = path
+                mNavigationHistory.add(path)
+                setupAdapter(mDirs, "", forceRecreate = true)
+            }
+
+            isNavigationRootsMode() -> {
+                if (path != config.tempFolderPath) {
+                    itemClicked(path)
+                }
+            }
+
+            clickedDir.subfoldersCount == 1 || !config.groupDirectSubfolders -> {
+                if (path != config.tempFolderPath) {
+                    itemClicked(path)
+                }
+            }
+
+            else -> {
+                mCurrentPathPrefix = path
+                mOpenedSubfolders.add(path)
+                setupAdapter(mDirs, "")
+            }
+        }
+    }
+
+    private fun isNavigationRootsMode() = config.navigationRoots.isNotEmpty() && !config.groupDirectSubfolders
+
+    // Builds the folders grid for "Navigation roots". At the top level it shows the
+    // configured roots followed by the rest of the top-level folders. Inside a root it
+    // shows that folder (when it holds media directly) and its direct subfolders, one
+    // level at a time. Folders are derived from the media directories, so intermediate
+    // folders without direct media still appear and can be descended into.
+    private fun getNavigationDirs(allDirs: ArrayList<Directory>): ArrayList<Directory> {
+        allDirs.forEach {
+            it.isNavigationBranch = false
+            it.isCurrentNavigationFolder = false
+            it.subfoldersMediaCount = it.mediaCnt
+        }
+
+        val roots = config.navigationRoots.map { it.trimEnd('/') }.filter { it.isNotEmpty() }
+        val outsideRoots = roots.none {
+            mNavigationPrefix.equals(it, true) || mNavigationPrefix.startsWith("$it/", true)
+        }
+        if (mNavigationPrefix.isNotEmpty() && outsideRoots) {
+            mNavigationPrefix = ""
+            mNavigationHistory = arrayListOf("")
+        }
+
+        if (mNavigationPrefix.isEmpty()) {
+            val rootDirs = roots.mapNotNull { createNavigationDir(it, allDirs) }
+            val others = allDirs.filter { dir ->
+                dir.path != RECYCLE_BIN && dir.path != FAVORITES &&
+                    roots.none { dir.path.equals(it, true) || dir.path.startsWith("$it/", true) }
+            }
+            val recycleBinAndFavorites = allDirs.filter { it.path == RECYCLE_BIN || it.path == FAVORITES }
+            return (recycleBinAndFavorites + rootDirs + others)
+                .distinctBy { it.path }.toMutableList() as ArrayList<Directory>
+        }
+
+        val prefix = mNavigationPrefix.trimEnd('/')
+        val result = ArrayList<Directory>()
+        allDirs.firstOrNull { it.path.equals(prefix, true) }?.let {
+            it.isCurrentNavigationFolder = true
+            result.add(it)
+        }
+        result.addAll(getSortedDirectories(navigationChildDirs(prefix, allDirs)))
+        return result.distinctBy { it.path }.toMutableList() as ArrayList<Directory>
+    }
+
+    private fun navigationChildDirs(prefix: String, allDirs: ArrayList<Directory>): ArrayList<Directory> {
+        val childPaths = LinkedHashSet<String>()
+        allDirs.forEach { dir ->
+            if (!dir.path.startsWith("$prefix/", true)) {
+                return@forEach
+            }
+
+            val firstSegment = dir.path.substring(prefix.length + 1).substringBefore('/')
+            if (firstSegment.isNotEmpty()) {
+                childPaths.add("$prefix/$firstSegment")
+            }
+        }
+
+        return childPaths.mapNotNull { createNavigationDir(it, allDirs) } as ArrayList<Directory>
+    }
+
+    private fun createNavigationDir(path: String, allDirs: ArrayList<Directory>): Directory? {
+        val mediaUnder = allDirs.filter { it.path.equals(path, true) || it.path.startsWith("$path/", true) }
+        if (mediaUnder.isEmpty()) {
+            return null
+        }
+
+        val dir = allDirs.firstOrNull { it.path.equals(path, true) } ?: run {
+            val base = mediaUnder.first()
+            Directory(
+                id = null,
+                path = path,
+                tmb = base.tmb,
+                name = getFolderNameFromPath(path),
+                mediaCnt = mediaUnder.sumOf { it.mediaCnt },
+                modified = mediaUnder.maxOf { it.modified },
+                taken = mediaUnder.maxOf { it.taken },
+                size = mediaUnder.sumOf { it.size },
+                location = getPathLocation(path),
+                types = mediaUnder.fold(0) { acc, mediaDir -> acc or mediaDir.types },
+                sortValue = ""
+            )
+        }
+
+        dir.subfoldersMediaCount = mediaUnder.sumOf { it.mediaCnt }
+        dir.isNavigationBranch = mediaUnder.any { it.path.startsWith("$path/", true) }
+        return dir
     }
 
     private fun setupScrollDirection() {

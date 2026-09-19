@@ -928,9 +928,12 @@ class DirectoryAdapter(
                 if (directory.subfoldersCount > 1) {
                     nameCount += " [${directory.subfoldersCount}]"
                 }
+            } else if (directory.isNavigationBranch) {
+                nameCount += "  \u203A"
             }
 
             dirName.text = nameCount
+            setupNavigationSelfMarker(directory)
 
             if (isListViewType || folderStyle == FOLDER_STYLE_ROUNDED_CORNERS) {
                 photoCnt.setTextColor(textColor)
@@ -982,6 +985,23 @@ class DirectoryAdapter(
     }
 
     override fun onChange(position: Int) = dirs.getOrNull(position)?.getBubbleText(directorySorting, activity, dateFormat, timeFormat) ?: ""
+
+    private fun DirectoryItemBinding.setupNavigationSelfMarker(directory: Directory) {
+        dirName.setCompoundDrawablesWithIntrinsicBounds(0, 0, 0, 0)
+        if (!directory.isCurrentNavigationFolder) {
+            return
+        }
+
+        activity.getDrawable(R.drawable.ic_navigation_self)?.mutate()?.let { icon ->
+            icon.setTint(textColor)
+            val iconSize = dirName.textSize.toInt()
+            icon.setBounds(0, 0, iconSize, iconSize)
+            dirName.setCompoundDrawables(null, null, icon, null)
+            dirName.compoundDrawablePadding = activity.resources.getDimensionPixelSize(
+                org.fossify.commons.R.dimen.small_margin
+            )
+        }
+    }
 
     private fun bindItem(view: View): DirectoryItemBinding {
         return when {

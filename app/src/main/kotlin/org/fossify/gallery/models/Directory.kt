@@ -25,7 +25,11 @@ data class Directory(
     // used with "Group direct subfolders" enabled
     @Ignore var subfoldersCount: Int = 0,
     @Ignore var subfoldersMediaCount: Int = 0,
-    @Ignore var containsMediaFilesDirectly: Boolean = true
+    @Ignore var containsMediaFilesDirectly: Boolean = true,
+
+    // used with "Navigation roots" enabled
+    @Ignore var isNavigationBranch: Boolean = false,
+    @Ignore var isCurrentNavigationFolder: Boolean = false
 ) {
 
     constructor() : this(null, "", "", "", 0, 0L, 0L, 0L, 0, 0, "", 0, 0)

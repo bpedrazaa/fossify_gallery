@@ -161,6 +161,29 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getStringSet(INCLUDED_FOLDERS, HashSet<String>())!!
         set(includedFolders) = prefs.edit().remove(INCLUDED_FOLDERS).putStringSet(INCLUDED_FOLDERS, includedFolders).apply()
 
+    fun addNavigationRoot(path: String) {
+        val currNavigationRoots = HashSet<String>(navigationRoots)
+        currNavigationRoots.add(path)
+        navigationRoots = currNavigationRoots
+    }
+
+    fun addNavigationRoots(paths: Set<String>) {
+        val currNavigationRoots = HashSet<String>(navigationRoots)
+        currNavigationRoots.addAll(paths)
+        navigationRoots = currNavigationRoots.filter { it.isNotEmpty() }.toHashSet()
+    }
+
+    fun removeNavigationRoot(path: String) {
+        val currNavigationRoots = HashSet<String>(navigationRoots)
+        currNavigationRoots.remove(path)
+        navigationRoots = currNavigationRoots
+    }
+
+    var navigationRoots: MutableSet<String>
+        get() = prefs.getStringSet(NAVIGATION_ROOTS, HashSet<String>())!!
+        set(navigationRoots) = prefs.edit().remove(NAVIGATION_ROOTS)
+            .putStringSet(NAVIGATION_ROOTS, navigationRoots).apply()
+
     var autoplayVideos: Boolean
         get() = prefs.getBoolean(AUTOPLAY_VIDEOS, false)
         set(autoplayVideos) = prefs.edit().putBoolean(AUTOPLAY_VIDEOS, autoplayVideos).apply()
