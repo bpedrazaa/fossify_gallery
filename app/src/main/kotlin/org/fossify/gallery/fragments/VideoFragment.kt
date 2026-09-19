@@ -77,8 +77,10 @@ import org.fossify.gallery.extensions.getActionBarHeight
 import org.fossify.gallery.extensions.getBottomActionsHeight
 import org.fossify.gallery.extensions.getFormattedDuration
 import org.fossify.gallery.extensions.getFriendlyMessage
+import org.fossify.gallery.extensions.isUnsupportedMediaError
 import org.fossify.gallery.extensions.launchGesturePlayer
 import org.fossify.gallery.extensions.parseFileChannel
+import org.fossify.gallery.extensions.showExternalPlayerPrompt
 import org.fossify.gallery.helpers.Config
 import org.fossify.gallery.helpers.EXOPLAYER_MAX_BUFFER_MS
 import org.fossify.gallery.helpers.EXOPLAYER_MIN_BUFFER_MS
@@ -131,6 +133,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
     private var mOriginalPlaybackSpeed = 1f
     private var mIsLongPressActive = false
     private var mHasAudio = true
+    private var mExternalPlayerPromptShown = false
 
     private val mTouchHoldRunnable = Runnable {
         mView.parent.requestDisallowInterceptTouchEvent(true)
@@ -501,6 +504,7 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
         fileDataSource.close()
 
         mPlayOnPrepared = true
+        mExternalPlayerPromptShown = false
 
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
@@ -577,6 +581,10 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
                         text = error.getFriendlyMessage(context)
                         setTextColor(if (context.config.blackBackground) Color.WHITE else context.getProperTextColor())
                         fadeIn()
+                        if (error.isUnsupportedMediaError() && mIsFragmentVisible && !mExternalPlayerPromptShown) {
+                            mExternalPlayerPromptShown = true
+                            activity?.showExternalPlayerPrompt(mMedium.path)
+                        }
                     } else {
                         beGone()
                         binding.videoPlayOutline.beVisible()

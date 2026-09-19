@@ -60,6 +60,7 @@ import org.fossify.commons.extensions.getColoredDrawableWithColor
 import org.fossify.commons.extensions.getFilenameFromUri
 import org.fossify.commons.extensions.getFormattedDuration
 import org.fossify.commons.extensions.getProperTextColor
+import org.fossify.commons.extensions.getUriMimeType
 import org.fossify.commons.extensions.onGlobalLayout
 import org.fossify.commons.extensions.setDrawablesRelativeWithIntrinsicBounds
 import org.fossify.commons.extensions.showErrorToast
@@ -74,8 +75,10 @@ import org.fossify.gallery.extensions.getActionBarHeight
 import org.fossify.gallery.extensions.getFormattedDuration
 import org.fossify.gallery.extensions.getFriendlyMessage
 import org.fossify.gallery.extensions.hideSystemUI
+import org.fossify.gallery.extensions.isUnsupportedMediaError
 import org.fossify.gallery.extensions.openPath
 import org.fossify.gallery.extensions.shareMediumPath
+import org.fossify.gallery.extensions.showExternalPlayerPrompt
 import org.fossify.gallery.extensions.showSystemUI
 import org.fossify.gallery.fragments.PlaybackSpeedFragment
 import org.fossify.gallery.helpers.DRAG_THRESHOLD
@@ -131,6 +134,7 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
     private var mIgnoreCloseDown = false
     private var mTouchSlop = 0
     private var mOriginalBrightness: Float? = null
+    private var mExternalPlayerPromptShown = false
     private lateinit var mPlaybackSpeedPill: TextView
     private lateinit var videoGestureHelper: VideoGestureHelper
 
@@ -371,6 +375,7 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
     private fun initExoPlayer() {
         val dataSpec = DataSpec(mUri!!)
         val fileDataSource = ContentDataSource(applicationContext)
+        mExternalPlayerPromptShown = false
         try {
             fileDataSource.open(dataSpec)
         } catch (e: Exception) {
@@ -449,6 +454,12 @@ open class VideoPlayerActivity : BaseViewerActivity(), SeekBar.OnSeekBarChangeLi
                         text = error.getFriendlyMessage(context)
                         setTextColor(if (context.config.blackBackground) Color.WHITE else context.getProperTextColor())
                         fadeIn()
+                        if (error.isUnsupportedMediaError() && !mExternalPlayerPromptShown) {
+                            mExternalPlayerPromptShown = true
+                            mUri?.let { uri ->
+                                showExternalPlayerPrompt(uri, getUriMimeType(uri.toString(), uri))
+                            }
+                        }
                     } else {
                         beGone()
                     }

@@ -257,6 +257,7 @@
     <string name="file_is_malformed_or_corrupted">File is malformed or corrupted.</string>
     <string name="media_exceeds_device_capabilities">Media exceeds device capabilities.</string>
     <string name="unsupported_format">Unsupported format.</string>
+    <string name="video_cant_be_played_open_externally">This video can\'t be played in the app. Open it with another app?</string>
 
     <!-- Player-->
     <string name="video_no_sound">This video has no audio</string>

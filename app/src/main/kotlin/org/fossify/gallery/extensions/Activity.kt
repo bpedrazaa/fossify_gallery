@@ -1,9 +1,11 @@
 package org.fossify.gallery.extensions
 
 import android.app.Activity
+import android.content.ComponentName
 import android.content.ContentProviderOperation
 import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Bitmap.CompressFormat
 import android.graphics.BitmapFactory
@@ -75,6 +77,72 @@ fun Activity.setAs(path: String) {
 
 fun Activity.openPath(path: String, forceChooser: Boolean, extras: HashMap<String, Boolean> = HashMap()) {
     openPathIntent(path, forceChooser, BuildConfig.APPLICATION_ID, extras = extras)
+}
+
+fun Activity.showExternalPlayerPrompt(path: String) {
+    ensureBackgroundThread {
+        val uri = getFinalUriFromPath(path, BuildConfig.APPLICATION_ID)
+        if (uri == null) {
+            toast(org.fossify.commons.R.string.unknown_error_occurred)
+            return@ensureBackgroundThread
+        }
+
+        val mimeType = getUriMimeType(path, uri)
+        runOnUiThread {
+            if (!isFinishing && !isDestroyed) {
+                showExternalPlayerPrompt(uri, mimeType)
+            }
+        }
+    }
+}
+
+fun Activity.showExternalPlayerPrompt(uri: Uri, mimeType: String) {
+    val intent = buildExternalPlayerIntent(uri, mimeType)
+    val hasExternalPlayer = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        .any { it.activityInfo.packageName != packageName }
+    if (!hasExternalPlayer) {
+        return
+    }
+
+    ConfirmationDialog(
+        this,
+        "",
+        R.string.video_cant_be_played_open_externally,
+        org.fossify.commons.R.string.open_with,
+        org.fossify.commons.R.string.cancel
+    ) {
+        openInExternalPlayer(uri, mimeType)
+    }
+}
+
+fun Activity.openInExternalPlayer(uri: Uri, mimeType: String) {
+    val intent = buildExternalPlayerIntent(uri, mimeType)
+    val resolvers = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+    val ownComponents = resolvers
+        .filter { it.activityInfo.packageName == packageName }
+        .map { ComponentName(it.activityInfo.packageName, it.activityInfo.name) }
+        .toTypedArray()
+
+    if (!isRPlus()) {
+        resolvers.forEach {
+            grantUriPermission(it.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
+    try {
+        startActivity(
+            Intent.createChooser(intent, getString(org.fossify.commons.R.string.open_with)).apply {
+                putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, ownComponents)
+            }
+        )
+    } catch (e: Exception) {
+        showErrorToast(e)
+    }
+}
+
+private fun Activity.buildExternalPlayerIntent(uri: Uri, mimeType: String) = Intent(Intent.ACTION_VIEW).apply {
+    setDataAndType(uri, mimeType)
+    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
 }
 
 fun Activity.launchGesturePlayer(path: String, extras: HashMap<String, Boolean> = HashMap()) {
