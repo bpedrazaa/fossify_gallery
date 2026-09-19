@@ -42,6 +42,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.FileDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -511,7 +512,8 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
 
-        mExoPlayer = ExoPlayer.Builder(requireContext())
+        val renderersFactory = DefaultRenderersFactory(requireContext()).setEnableDecoderFallback(true)
+        mExoPlayer = ExoPlayer.Builder(requireContext(), renderersFactory)
             .setMediaSourceFactory(DefaultMediaSourceFactory(requireContext()))
             .setSeekParameters(SeekParameters.EXACT)
             .setLoadControl(loadControl)

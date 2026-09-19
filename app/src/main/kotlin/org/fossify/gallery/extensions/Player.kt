@@ -39,3 +39,16 @@ fun PlaybackException.getFriendlyMessage(context: Context): String {
 
     return context.getString(resource)
 }
+
+fun PlaybackException.isUnsupportedMediaError(): Boolean {
+    return when (errorCode) {
+        ERROR_CODE_DECODER_INIT_FAILED,
+        ERROR_CODE_DECODING_FAILED,
+        ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES,
+        ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
+        ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
+        ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED -> true
+
+        else -> false
+    }
+}

@@ -11,6 +11,5 @@
     android:text="@string/failed_to_load_media"
     android:textAlignment="center"
     android:visibility="gone"
-    app:drawableTopCompat="@drawable/ic_vector_warning_colored"
     tools:alpha="1"
     tools:visibility="visible" />

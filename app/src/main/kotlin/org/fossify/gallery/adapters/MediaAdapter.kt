@@ -7,9 +7,7 @@ import android.graphics.drawable.Icon
 import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
-import android.widget.ImageView
 import android.widget.Toast
-import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.view.allViews
 import com.bumptech.glide.Glide
 import com.qtalk.recyclerviewfastscroller.RecyclerViewFastScroller
@@ -749,8 +747,7 @@ class MediaAdapter(
                 signature = medium.getKey(),
                 skipMemoryCacheAtPaths = rotatedImagePaths,
                 onError = {
-                    mediumThumbnail.scaleType = ImageView.ScaleType.CENTER
-                    mediumThumbnail.setImageDrawable(AppCompatResources.getDrawable(activity, R.drawable.ic_vector_warning_colored))
+                    mediumThumbnail.setImageDrawable(null)
                 }
             )
 
