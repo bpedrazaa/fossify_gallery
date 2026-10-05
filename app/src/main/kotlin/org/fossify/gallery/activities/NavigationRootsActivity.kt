@@ -1,6 +1,7 @@
 package org.fossify.gallery.activities
 
 import android.os.Bundle
+import java.util.Locale
 import org.fossify.commons.dialogs.FilePickerDialog
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.commons.extensions.getProperTextColor
@@ -14,6 +15,7 @@ import org.fossify.gallery.adapters.ManageFoldersAdapter
 import org.fossify.gallery.adapters.ManageFoldersAdapter.FolderType
 import org.fossify.gallery.databinding.ActivityManageFoldersBinding
 import org.fossify.gallery.extensions.config
+import org.fossify.gallery.extensions.getFolderNameFromPath
 
 class NavigationRootsActivity : SimpleActivity(), RefreshRecyclerViewListener {
 
@@ -39,8 +41,9 @@ class NavigationRootsActivity : SimpleActivity(), RefreshRecyclerViewListener {
     }
 
     private fun updateFolders() {
-        val folders = ArrayList<String>()
-        config.navigationRoots.mapTo(folders) { it }
+        val folders = ArrayList(
+            config.navigationRoots.sortedBy { getFolderNameFromPath(it).lowercase(Locale.getDefault()) }
+        )
         binding.manageFoldersPlaceholder.apply {
             text = getString(R.string.navigation_roots_placeholder)
             beVisibleIf(folders.isEmpty())

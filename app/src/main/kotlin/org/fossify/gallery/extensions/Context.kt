@@ -205,13 +205,8 @@ fun Context.getSortedDirectories(source: ArrayList<Directory>): ArrayList<Direct
 
         var result = when {
             sorting and SORT_BY_NAME != 0 -> {
-                if (o1.sortValue.isEmpty()) {
-                    o1.sortValue = o1.name.lowercase(Locale.getDefault())
-                }
-
-                if (o2.sortValue.isEmpty()) {
-                    o2.sortValue = o2.name.lowercase(Locale.getDefault())
-                }
+                o1.sortValue = o1.name.lowercase(Locale.getDefault())
+                o2.sortValue = o2.name.lowercase(Locale.getDefault())
 
                 if (sorting and SORT_USE_NUMERIC_VALUE != 0) {
                     AlphanumericComparator().compare(
@@ -225,13 +220,8 @@ fun Context.getSortedDirectories(source: ArrayList<Directory>): ArrayList<Direct
             }
 
             sorting and SORT_BY_PATH != 0 -> {
-                if (o1.sortValue.isEmpty()) {
-                    o1.sortValue = o1.path.lowercase(Locale.getDefault())
-                }
-
-                if (o2.sortValue.isEmpty()) {
-                    o2.sortValue = o2.path.lowercase(Locale.getDefault())
-                }
+                o1.sortValue = o1.path.lowercase(Locale.getDefault())
+                o2.sortValue = o2.path.lowercase(Locale.getDefault())
 
                 if (sorting and SORT_USE_NUMERIC_VALUE != 0) {
                     AlphanumericComparator().compare(
@@ -257,12 +247,30 @@ fun Context.getSortedDirectories(source: ArrayList<Directory>): ArrayList<Direct
     return movePinnedDirectoriesToFront(dirs)
 }
 
+fun Context.getSortedNavigationDirectories(source: ArrayList<Directory>): ArrayList<Directory> {
+    val sorting = config.directorySorting
+    if (sorting and SORT_BY_RANDOM != 0) {
+        val dirs = source.clone() as ArrayList<Directory>
+        dirs.sortWith { o1, o2 ->
+            var result = o1.name.lowercase(Locale.getDefault()).normalizeString()
+                .compareTo(o2.name.lowercase(Locale.getDefault()).normalizeString())
+            if (sorting and SORT_DESCENDING != 0) {
+                result *= -1
+            }
+            result
+        }
+        return movePinnedDirectoriesToFront(dirs)
+    }
+    return getSortedDirectories(source)
+}
+
 fun Context.getDirsToShow(
     dirs: ArrayList<Directory>,
     allDirs: ArrayList<Directory>,
-    currentPathPrefix: String
+    currentPathPrefix: String,
+    forceGrouping: Boolean = false
 ): ArrayList<Directory> {
-    return if (config.groupDirectSubfolders) {
+    return if (config.groupDirectSubfolders || forceGrouping) {
         dirs.forEach {
             it.subfoldersCount = 0
             it.subfoldersMediaCount = it.mediaCnt
@@ -1326,6 +1334,87 @@ fun Context.getDirectorySortingValue(
     }
 
     return result.toString()
+}
+
+fun Context.getDirectorySortingValue(
+    path: String,
+    name: String,
+    size: Long,
+    count: Int,
+    modified: Long,
+    taken: Long
+): String {
+    val sorting = config.directorySorting
+    return when {
+        sorting and SORT_BY_NAME != 0 -> name
+        sorting and SORT_BY_PATH != 0 -> path
+        sorting and SORT_BY_SIZE != 0 -> size.toString()
+        sorting and SORT_BY_COUNT != 0 -> count.toString()
+        sorting and SORT_BY_DATE_MODIFIED != 0 -> modified.toString()
+        sorting and SORT_BY_DATE_TAKEN != 0 -> taken.toString()
+        else -> ""
+    }
+}
+
+fun Context.createNavigationDir(path: String, allDirs: ArrayList<Directory>): Directory? {
+    val mediaUnder = allDirs.filter { it.path.equals(path, true) || it.path.startsWith("$path/", true) }
+    if (mediaUnder.isEmpty()) {
+        return null
+    }
+
+    val dir = allDirs.firstOrNull { it.path.equals(path, true) } ?: run {
+        val base = mediaUnder.first()
+        val name = getFolderNameFromPath(path)
+        val size = mediaUnder.sumOf { it.size }
+        val count = mediaUnder.sumOf { it.mediaCnt }
+        val modified = mediaUnder.maxOf { it.modified }
+        val taken = mediaUnder.maxOf { it.taken }
+        Directory(
+            id = null,
+            path = path,
+            tmb = base.tmb,
+            name = name,
+            mediaCnt = count,
+            modified = modified,
+            taken = taken,
+            size = size,
+            location = getPathLocation(path),
+            types = mediaUnder.fold(0) { acc, mediaDir -> acc or mediaDir.types },
+            sortValue = getDirectorySortingValue(path, name, size, count, modified, taken)
+        )
+    }
+
+    dir.subfoldersMediaCount = mediaUnder.sumOf { it.mediaCnt }
+    dir.isNavigationBranch = mediaUnder.any { it.path.startsWith("$path/", true) }
+    return dir
+}
+
+fun Context.navigationChildDirs(prefix: String, allDirs: ArrayList<Directory>): ArrayList<Directory> {
+    val childPaths = LinkedHashSet<String>()
+    allDirs.forEach { dir ->
+        if (!dir.path.startsWith("$prefix/", true)) {
+            return@forEach
+        }
+
+        val firstSegment = dir.path.substring(prefix.length + 1).substringBefore('/')
+        if (firstSegment.isNotEmpty()) {
+            childPaths.add("$prefix/$firstSegment")
+        }
+    }
+
+    return childPaths.mapNotNull { createNavigationDir(it, allDirs) } as ArrayList<Directory>
+}
+
+fun Context.expandNavigationRoots(roots: List<String>, allDirs: ArrayList<Directory>): ArrayList<Directory> {
+    val result = ArrayList<Directory>()
+    roots.forEach { root ->
+        if (allDirs.any { it.path.equals(root, true) }) {
+            createNavigationDir(root, allDirs)?.let { result.add(it) }
+        } else {
+            result.addAll(navigationChildDirs(root, allDirs))
+        }
+    }
+    return result
 }
 
 fun Context.updateDirectoryPath(path: String) {

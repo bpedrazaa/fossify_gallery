@@ -63,6 +63,7 @@ import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.DAY_SECONDS
 import org.fossify.commons.helpers.FAVORITES
 import org.fossify.commons.helpers.PERMISSION_READ_STORAGE
+import org.fossify.commons.helpers.SORT_BY_COUNT
 import org.fossify.commons.helpers.SORT_BY_DATE_MODIFIED
 import org.fossify.commons.helpers.SORT_BY_DATE_TAKEN
 import org.fossify.commons.helpers.SORT_BY_SIZE
@@ -88,7 +89,9 @@ import org.fossify.gallery.dialogs.GrantAllFilesDialog
 import org.fossify.gallery.extensions.addTempFolderIfNeeded
 import org.fossify.gallery.extensions.config
 import org.fossify.gallery.extensions.createDirectoryFromMedia
+import org.fossify.gallery.extensions.createNavigationDir
 import org.fossify.gallery.extensions.directoryDB
+import org.fossify.gallery.extensions.expandNavigationRoots
 import org.fossify.gallery.extensions.getCachedDirectories
 import org.fossify.gallery.extensions.getCachedMedia
 import org.fossify.gallery.extensions.getDirectorySortingValue
@@ -100,6 +103,7 @@ import org.fossify.gallery.extensions.getNoMediaFoldersSync
 import org.fossify.gallery.extensions.getOTGFolderChildrenNames
 import org.fossify.gallery.extensions.getPathLocation
 import org.fossify.gallery.extensions.getSortedDirectories
+import org.fossify.gallery.extensions.getSortedNavigationDirectories
 import org.fossify.gallery.extensions.handleExcludedFolderPasswordProtection
 import org.fossify.gallery.extensions.handleMediaManagementPrompt
 import org.fossify.gallery.extensions.isDownloadsFolder
@@ -109,6 +113,7 @@ import org.fossify.gallery.extensions.launchSettings
 import org.fossify.gallery.extensions.mediaDB
 import org.fossify.gallery.extensions.movePathsInRecycleBin
 import org.fossify.gallery.extensions.movePinnedDirectoriesToFront
+import org.fossify.gallery.extensions.navigationChildDirs
 import org.fossify.gallery.extensions.openRecycleBin
 import org.fossify.gallery.extensions.removeInvalidDBDirectories
 import org.fossify.gallery.extensions.storeDirectoryItems
@@ -667,7 +672,10 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
     private fun showSortingDialog() {
         ChangeSortingDialog(this, true, false) {
             binding.directoriesGrid.adapter = null
-            if (config.directorySorting and SORT_BY_DATE_MODIFIED != 0 || config.directorySorting and SORT_BY_DATE_TAKEN != 0) {
+            val sorting = config.directorySorting
+            val needsRescan = sorting and SORT_BY_SIZE != 0 || sorting and SORT_BY_COUNT != 0 ||
+                sorting and SORT_BY_DATE_MODIFIED != 0 || sorting and SORT_BY_DATE_TAKEN != 0
+            if (needsRescan) {
                 getDirectories()
             } else {
                 ensureBackgroundThread {
@@ -1590,11 +1598,12 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
     private fun isNavigationRootsMode() = config.navigationRoots.isNotEmpty() && !config.groupDirectSubfolders
 
-    // Builds the folders grid for "Navigation roots". At the top level it shows the
-    // configured roots followed by the rest of the top-level folders. Inside a root it
-    // shows that folder (when it holds media directly) and its direct subfolders, one
-    // level at a time. Folders are derived from the media directories, so intermediate
-    // folders without direct media still appear and can be descended into.
+    // Builds the folders grid for "Navigation roots". At the top level a root that holds
+    // media directly is shown as a single folder, while a root without direct media is
+    // expanded into its immediate subfolders. The rest of the top-level folders follow.
+    // Inside a branch it shows that folder (when it holds media directly) and its direct
+    // subfolders, one level at a time. Folders are derived from the media directories, so
+    // intermediate folders without direct media still appear and can be descended into.
     private fun getNavigationDirs(allDirs: ArrayList<Directory>): ArrayList<Directory> {
         allDirs.forEach {
             it.isNavigationBranch = false
@@ -1612,7 +1621,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         }
 
         if (mNavigationPrefix.isEmpty()) {
-            val rootDirs = roots.mapNotNull { createNavigationDir(it, allDirs) }
+            val rootDirs = getSortedNavigationDirectories(expandNavigationRoots(roots, allDirs))
             val others = allDirs.filter { dir ->
                 dir.path != RECYCLE_BIN && dir.path != FAVORITES &&
                     roots.none { dir.path.equals(it, true) || dir.path.startsWith("$it/", true) }
@@ -1628,52 +1637,8 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             it.isCurrentNavigationFolder = true
             result.add(it)
         }
-        result.addAll(getSortedDirectories(navigationChildDirs(prefix, allDirs)))
+        result.addAll(getSortedNavigationDirectories(navigationChildDirs(prefix, allDirs)))
         return result.distinctBy { it.path }.toMutableList() as ArrayList<Directory>
-    }
-
-    private fun navigationChildDirs(prefix: String, allDirs: ArrayList<Directory>): ArrayList<Directory> {
-        val childPaths = LinkedHashSet<String>()
-        allDirs.forEach { dir ->
-            if (!dir.path.startsWith("$prefix/", true)) {
-                return@forEach
-            }
-
-            val firstSegment = dir.path.substring(prefix.length + 1).substringBefore('/')
-            if (firstSegment.isNotEmpty()) {
-                childPaths.add("$prefix/$firstSegment")
-            }
-        }
-
-        return childPaths.mapNotNull { createNavigationDir(it, allDirs) } as ArrayList<Directory>
-    }
-
-    private fun createNavigationDir(path: String, allDirs: ArrayList<Directory>): Directory? {
-        val mediaUnder = allDirs.filter { it.path.equals(path, true) || it.path.startsWith("$path/", true) }
-        if (mediaUnder.isEmpty()) {
-            return null
-        }
-
-        val dir = allDirs.firstOrNull { it.path.equals(path, true) } ?: run {
-            val base = mediaUnder.first()
-            Directory(
-                id = null,
-                path = path,
-                tmb = base.tmb,
-                name = getFolderNameFromPath(path),
-                mediaCnt = mediaUnder.sumOf { it.mediaCnt },
-                modified = mediaUnder.maxOf { it.modified },
-                taken = mediaUnder.maxOf { it.taken },
-                size = mediaUnder.sumOf { it.size },
-                location = getPathLocation(path),
-                types = mediaUnder.fold(0) { acc, mediaDir -> acc or mediaDir.types },
-                sortValue = ""
-            )
-        }
-
-        dir.subfoldersMediaCount = mediaUnder.sumOf { it.mediaCnt }
-        dir.isNavigationBranch = mediaUnder.any { it.path.startsWith("$path/", true) }
-        return dir
     }
 
     private fun setupScrollDirection() {
