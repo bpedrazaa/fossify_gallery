@@ -258,7 +258,6 @@
     <ID>MaxLineLength:DirectoryAdapter.kt$DirectoryAdapter$(!isRPlus() || isExternalStorageManager()) &amp;&amp; selectedPaths.any { it.doesThisOrParentHaveNoMedia(HashMap(), null) }</ID>
     <ID>MaxLineLength:DirectoryAdapter.kt$DirectoryAdapter$activity.directoryDB.updateDirectoryAfterRename(firstDir.tmb, firstDir.name, firstDir.path, sourcePath)</ID>
     <ID>MaxLineLength:DirectoryAdapter.kt$DirectoryAdapter$dirLocation.setImageResource(if (directory.location == LOCATION_SD) org.fossify.commons.R.drawable.ic_sd_card_vector else org.fossify.commons.R.drawable.ic_usb_vector)</ID>
-    <ID>MaxLineLength:DirectoryAdapter.kt$DirectoryAdapter$dirThumbnail.setImageDrawable(AppCompatResources.getDrawable(activity, R.drawable.ic_vector_warning_colored))</ID>
     <ID>MaxLineLength:DirectoryAdapter.kt$DirectoryAdapter$findItem(R.id.cab_empty_disable_recycle_bin).isVisible = isOneItemSelected &amp;&amp; selectedPaths.first() == RECYCLE_BIN</ID>
     <ID>MaxLineLength:DirectoryAdapter.kt$DirectoryAdapter$findItem(R.id.cab_rename).isVisible = !selectedPaths.contains(FAVORITES) &amp;&amp; !selectedPaths.contains(RECYCLE_BIN)</ID>
     <ID>MaxLineLength:DirectoryAdapter.kt$DirectoryAdapter$override fun onChange(position: Int)</ID>
@@ -302,7 +301,6 @@
     <ID>MaxLineLength:MediaAdapter.kt$MediaAdapter$findItem(R.id.cab_confirm_selection).isVisible = isAGetIntent &amp;&amp; allowMultiplePicks &amp;&amp; selectedKeys.isNotEmpty()</ID>
     <ID>MaxLineLength:MediaAdapter.kt$MediaAdapter$findItem(R.id.cab_restore_recycle_bin_files).isVisible = selectedPaths.all { it.startsWith(activity.recycleBinPath) }</ID>
     <ID>MaxLineLength:MediaAdapter.kt$MediaAdapter$if (config.useRecycleBin &amp;&amp; !config.tempSkipRecycleBin &amp;&amp; !isRecycleBin) org.fossify.commons.R.string.move_to_recycle_bin_confirmation else org.fossify.commons.R.string.deletion_confirmation</ID>
-    <ID>MaxLineLength:MediaAdapter.kt$MediaAdapter$mediumThumbnail.setImageDrawable(AppCompatResources.getDrawable(activity, R.drawable.ic_vector_warning_colored))</ID>
     <ID>MaxLineLength:MediaAdapter.kt$MediaAdapter$menu.findItem(R.id.cab_add_to_favorites).isVisible = selectedItems.none { it.getIsInRecycleBin() } &amp;&amp; selectedItems.any { !it.isFavorite }</ID>
     <ID>MaxLineLength:MediaAdapter.kt$MediaAdapter$menu.findItem(R.id.cab_hide).isVisible = (!isRPlus() || isExternalStorageManager()) &amp;&amp; !isInRecycleBin &amp;&amp; selectedItems.any { !it.isHidden() }</ID>
     <ID>MaxLineLength:MediaAdapter.kt$MediaAdapter$menu.findItem(R.id.cab_remove_from_favorites).isVisible = selectedItems.none { it.getIsInRecycleBin() } &amp;&amp; selectedItems.any { it.isFavorite }</ID>

@@ -55,6 +55,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import androidx.core.net.toUri
 
+private const val GENERIC_MIME_TYPE = "application/octet-stream"
+
 fun Activity.sharePath(path: String) {
     sharePathIntent(path, BuildConfig.APPLICATION_ID)
 }
@@ -140,9 +142,17 @@ fun Activity.openInExternalPlayer(uri: Uri, mimeType: String) {
     }
 }
 
-private fun Activity.buildExternalPlayerIntent(uri: Uri, mimeType: String) = Intent(Intent.ACTION_VIEW).apply {
-    setDataAndType(uri, mimeType)
-    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+private fun Activity.buildExternalPlayerIntent(uri: Uri, mimeType: String): Intent {
+    val resolvedMimeType = if (mimeType.isEmpty() || mimeType == GENERIC_MIME_TYPE) {
+        "video/*"
+    } else {
+        mimeType
+    }
+
+    return Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, resolvedMimeType)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
 }
 
 fun Activity.launchGesturePlayer(path: String, extras: HashMap<String, Boolean> = HashMap()) {
