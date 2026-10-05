@@ -884,7 +884,9 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
 
             activity?.runOnUiThread {
                 setupTimeHolder()
-                setPosition(0)
+                if (!mWasVideoStarted) {
+                    setPosition(0)
+                }
             }
         }
     }
@@ -894,10 +896,6 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
             mDuration = mExoPlayer!!.duration
             setupTimeHolder()
             setPosition(mCurrTime)
-
-            if (mIsFragmentVisible && (mConfig.autoplayVideos)) {
-                playVideo()
-            }
         }
 
         if (mPositionWhenInit != 0L && !mWasPlayerInited) {
@@ -906,7 +904,8 @@ class VideoFragment : ViewPagerFragment(), TextureView.SurfaceTextureListener,
         }
 
         mIsPlayerPrepared = true
-        if (mPlayOnPrepared && !mIsPlaying) {
+        val shouldAutoplay = mPlayOnPrepared && !mIsPlaying && mIsFragmentVisible && mConfig.autoplayVideos
+        if (shouldAutoplay) {
             if (mPositionAtPause != 0L) {
                 mExoPlayer?.seekTo(mPositionAtPause)
                 mPositionAtPause = 0L
