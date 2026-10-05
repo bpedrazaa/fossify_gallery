@@ -30,10 +30,12 @@ import org.fossify.gallery.adapters.DirectoryAdapter
 import org.fossify.gallery.databinding.DialogDirectoryPickerBinding
 import org.fossify.gallery.extensions.addTempFolderIfNeeded
 import org.fossify.gallery.extensions.config
+import org.fossify.gallery.extensions.expandNavigationRoots
 import org.fossify.gallery.extensions.getCachedDirectories
 import org.fossify.gallery.extensions.getDirsToShow
 import org.fossify.gallery.extensions.getDistinctPath
 import org.fossify.gallery.extensions.getSortedDirectories
+import org.fossify.gallery.extensions.navigationChildDirs
 import org.fossify.gallery.models.Directory
 
 class PickDirectoryDialog(
@@ -69,7 +71,7 @@ class PickDirectoryDialog(
         configureSearchView()
 
         val builder = activity.getAlertDialogBuilder()
-            .setPositiveButton(org.fossify.commons.R.string.ok, null)
+            .setPositiveButton(R.string.select_this_folder, null)
             .setNegativeButton(org.fossify.commons.R.string.cancel, null)
 
         if (showOtherFolderButton) {
@@ -79,6 +81,12 @@ class PickDirectoryDialog(
         builder.apply {
             activity.setupDialogStuff(binding.root, this, org.fossify.commons.R.string.select_destination) { alertDialog ->
                 dialog = alertDialog
+                alertDialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnClickListener {
+                    if (currentPathPrefix.isNotEmpty()) {
+                        selectFolder(currentPathPrefix)
+                    }
+                }
+                configureConfirmButton()
                 binding.directoriesShowHidden.beVisibleIf(!context.config.shouldShowHidden)
                 binding.directoriesShowHidden.setOnClickListener {
                     activity.handleHiddenFolderPasswordProtection {
@@ -91,15 +99,10 @@ class PickDirectoryDialog(
                 alertDialog.onBackPressedDispatcher.addCallback(alertDialog) {
                     if (searchView.isSearchOpen) {
                         searchView.closeSearch()
-                    } else if (activity.config.groupDirectSubfolders) {
-                        if (currentPathPrefix.isEmpty()) {
-                            isEnabled = false
-                            alertDialog.onBackPressedDispatcher.onBackPressed()
-                        } else {
-                            openedSubfolders.removeAt(openedSubfolders.lastIndex)
-                            currentPathPrefix = openedSubfolders.last()
-                            gotDirectories(allDirectories)
-                        }
+                    } else if (currentPathPrefix.isNotEmpty()) {
+                        openedSubfolders.removeAt(openedSubfolders.lastIndex)
+                        currentPathPrefix = openedSubfolders.last()
+                        gotDirectories(allDirectories)
                     } else {
                         isEnabled = false
                         alertDialog.onBackPressedDispatcher.onBackPressed()
@@ -117,18 +120,7 @@ class PickDirectoryDialog(
 
         toggleHideOnScroll(!config.scrollHorizontally)
         setupMenu()
-        setSearchViewListeners()
-        updateSearchViewUi()
-    }
 
-    private fun MySearchMenu.updateSearchViewUi() {
-        requireToolbar().beInvisible()
-        updateColors()
-        setBackgroundColor(Color.TRANSPARENT)
-        searchBarContainer.setBackgroundColor(Color.TRANSPARENT)
-    }
-
-    private fun MySearchMenu.setSearchViewListeners() {
         onSearchOpenListener = {
             updateSearchViewLeftIcon(org.fossify.commons.R.drawable.ic_cross_vector)
         }
@@ -142,6 +134,11 @@ class PickDirectoryDialog(
         onSearchTextChangedListener = { text ->
             filterFolderListBySearchQuery(text)
         }
+
+        requireToolbar().beInvisible()
+        updateColors()
+        setBackgroundColor(Color.TRANSPARENT)
+        searchBarContainer.setBackgroundColor(Color.TRANSPARENT)
     }
 
     private fun updateSearchViewLeftIcon(iconResId: Int) = with(searchView.binding.topToolbarSearchIcon) {
@@ -169,6 +166,8 @@ class PickDirectoryDialog(
                 }
             }
         }
+
+        configureConfirmButton()
     }
 
     private fun checkPlaceholderVisibility(dirs: ArrayList<Directory>) = with(binding) {
@@ -223,7 +222,13 @@ class PickDirectoryDialog(
         val distinctDirs = newDirs.filter { showFavoritesBin || (!it.isRecycleBin() && !it.areFavorites()) }.distinctBy { it.path.getDistinctPath() }
             .toMutableList() as ArrayList<Directory>
         val sortedDirs = activity.getSortedDirectories(distinctDirs)
-        val dirs = activity.getDirsToShow(sortedDirs, allDirectories, currentPathPrefix).clone() as ArrayList<Directory>
+        val navigationRoots = config.navigationRoots
+        val dirs = if (currentPathPrefix.isEmpty() && navigationRoots.isNotEmpty()) {
+            val roots = navigationRoots.map { it.trimEnd('/') }.filter { it.isNotEmpty() }
+            activity.getSortedDirectories(activity.expandNavigationRoots(roots, allDirectories))
+        } else {
+            activity.getDirsToShow(sortedDirs, allDirectories, currentPathPrefix, forceGrouping = true)
+        }.clone() as ArrayList<Directory>
         if (dirs.hashCode() == shownDirectories.hashCode()) {
             return
         }
@@ -232,21 +237,8 @@ class PickDirectoryDialog(
         val adapter = DirectoryAdapter(activity, dirs.clone() as ArrayList<Directory>, null, binding.directoriesGrid, true) {
             val clickedDir = it as Directory
             val path = clickedDir.path
-            if (clickedDir.subfoldersCount == 1 || !activity.config.groupDirectSubfolders) {
-                if (isPickingCopyMoveDestination && path.trimEnd('/') == sourcePath) {
-                    activity.toast(org.fossify.commons.R.string.source_and_destination_same)
-                    return@DirectoryAdapter
-                } else if (isPickingCopyMoveDestination && activity.isRestrictedWithSAFSdk30(path) && !activity.isInDownloadDir(path)) {
-                    activity.toast(org.fossify.commons.R.string.system_folder_copy_restriction, Toast.LENGTH_LONG)
-                    return@DirectoryAdapter
-                } else {
-                    activity.handleLockedFolderOpening(path) { success ->
-                        if (success) {
-                            callback(path)
-                        }
-                    }
-                    dialog?.dismiss()
-                }
+            if (activity.navigationChildDirs(path, allDirectories).isEmpty()) {
+                selectFolder(path)
             } else {
                 currentPathPrefix = path
                 openedSubfolders.add(path)
@@ -259,5 +251,36 @@ class PickDirectoryDialog(
             directoriesGrid.adapter = adapter
             directoriesFastscroller.setScrollVertically(!scrollHorizontally)
         }
+
+        configureConfirmButton()
     }
+
+    private fun configureConfirmButton() {
+        val button = dialog?.getButton(AlertDialog.BUTTON_POSITIVE) ?: return
+        val enabled = currentPathPrefix.isNotEmpty()
+        button.isEnabled = enabled
+        button.alpha = if (enabled) 1f else DISABLED_BUTTON_ALPHA
+    }
+
+    companion object {
+        private const val DISABLED_BUTTON_ALPHA = 0.5f
+    }
+
+    private fun selectFolder(path: String) {
+        if (isPickingCopyMoveDestination && path.trimEnd('/') == sourcePath) {
+            activity.toast(org.fossify.commons.R.string.source_and_destination_same)
+            return
+        } else if (isPickingCopyMoveDestination && activity.isRestrictedWithSAFSdk30(path) && !activity.isInDownloadDir(path)) {
+            activity.toast(org.fossify.commons.R.string.system_folder_copy_restriction, Toast.LENGTH_LONG)
+            return
+        }
+
+        activity.handleLockedFolderOpening(path) { success ->
+            if (success) {
+                callback(path)
+            }
+        }
+        dialog?.dismiss()
+    }
+
 }
