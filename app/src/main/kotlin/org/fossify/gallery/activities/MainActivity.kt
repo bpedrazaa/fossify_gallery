@@ -163,6 +163,7 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
         private const val PICK_MEDIA = 2
         private const val PICK_WALLPAPER = 3
         private const val LAST_MEDIA_CHECK_PERIOD = 3000L
+        private const val ADAPTER_REFRESH_INTERVAL_MS = 250L
     }
 
     private var mIsPickImageIntent = false
@@ -1212,6 +1213,8 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
             getProperDateTaken = true,
             dateTakens = dateTakens
         )
+        var adapterDirty = false
+        var lastAdapterRefresh = 0L
         try {
             for (directory in dirs) {
                 if (mShouldStopFetching || isDestroyed || isFinishing) {
@@ -1278,7 +1281,13 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                     sortValue = getDirectorySortingValue(curMedia, path, name, size, mediaCnt)
                 }
 
-                setupAdapter(dirs)
+                adapterDirty = true
+                val now = System.currentTimeMillis()
+                if (now - lastAdapterRefresh >= ADAPTER_REFRESH_INTERVAL_MS) {
+                    lastAdapterRefresh = now
+                    adapterDirty = false
+                    setupAdapter(dirs)
+                }
 
                 // update directories and media files in the local db, delete invalid items. Intentionally creating a new thread
                 updateDBDirectory(directory)
@@ -1292,10 +1301,11 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 }
 
                 if (!directory.isRecycleBin()) {
+                    val currentMediaSet = HashSet<Medium>(curMedia)
                     getCachedMedia(directory.path, getVideosOnly, getImagesOnly) {
                         val mediaToDelete = ArrayList<Medium>()
                         it.forEach {
-                            if (!curMedia.contains(it)) {
+                            if (!currentMediaSet.contains(it)) {
                                 val medium = it as? Medium
                                 val path = medium?.path
                                 if (path != null) {
@@ -1392,7 +1402,13 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 noMediaFolders = noMediaFolders
             )
             dirs.add(newDir)
-            setupAdapter(dirs)
+            adapterDirty = true
+            val now = System.currentTimeMillis()
+            if (now - lastAdapterRefresh >= ADAPTER_REFRESH_INTERVAL_MS) {
+                lastAdapterRefresh = now
+                adapterDirty = false
+                setupAdapter(dirs)
+            }
 
             // make sure to create a new thread for these operations, dont just use the common bg thread
             Thread {
@@ -1404,6 +1420,10 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
                 } catch (ignored: Exception) {
                 }
             }.start()
+        }
+
+        if (adapterDirty) {
+            setupAdapter(dirs)
         }
 
         mLoadedInitialPhotos = true
