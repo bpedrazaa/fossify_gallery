@@ -1363,16 +1363,14 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
 
     private fun getPositionInList(items: MutableList<Medium>): Int {
         mPos = 0
+        val portraitPath = getPortraitPath()
+        val isPortraitFolder = portraitPath.isNotEmpty()
+        val portraitNames = if (isPortraitFolder) File(portraitPath).parentFile?.list()?.toHashSet() else null
+
         for ((i, medium) in items.withIndex()) {
-            val portraitPath = getPortraitPath()
-            if (portraitPath != "") {
-                val portraitPaths = File(portraitPath).parentFile?.list()
-                if (portraitPaths != null) {
-                    for (path in portraitPaths) {
-                        if (medium.name == path) {
-                            return i
-                        }
-                    }
+            if (isPortraitFolder) {
+                if (portraitNames?.contains(medium.name) == true) {
+                    return i
                 }
             } else if (medium.path.equals(mPath, true)) {
                 return i
