@@ -57,12 +57,13 @@ class MediaFetcher(val context: Context) {
             if (curMedia.isEmpty()) {
                 val newMedia = getMediaInFolder(
                     curPath, isPickImage, isPickVideo, filterMedia, getProperDateTaken, getProperLastModified, getProperFileSize,
-                    favoritePaths, getVideoDurations, lastModifieds.clone() as HashMap<String, Long>, dateTakens.clone() as HashMap<String, Long>
+                    favoritePaths, getVideoDurations, lastModifieds, dateTakens
                 )
 
                 if (curPath == FAVORITES && isRPlus() && !isExternalStorageManager()) {
-                    val files =
-                        getAndroid11FolderMedia(isPickImage, isPickVideo, favoritePaths, true, getProperDateTaken, dateTakens.clone() as HashMap<String, Long>)
+                    val files = getAndroid11FolderMedia(
+                        isPickImage, isPickVideo, favoritePaths, true, getProperDateTaken, dateTakens
+                    )
                     newMedia.forEach { newMedium ->
                         for ((folder, media) in files) {
                             media.forEach { medium ->
@@ -382,7 +383,7 @@ class MediaFetcher(val context: Context) {
                 }
             } else {
                 var lastModified: Long
-                var newLastModified = lastModifieds.remove(path)
+                var newLastModified = lastModifieds[path]
                 if (newLastModified == null) {
                     newLastModified = if (getProperLastModified) {
                         file.lastModified()
@@ -396,7 +397,7 @@ class MediaFetcher(val context: Context) {
                 val videoDuration = if (getVideoDurations && isVideo) context.getDuration(path) ?: 0 else 0
 
                 if (getProperDateTaken) {
-                    var newDateTaken = dateTakens.remove(path)
+                    var newDateTaken = dateTakens[path]
                     if (newDateTaken == null) {
                         newDateTaken = if (getProperLastModified) {
                             lastModified
@@ -513,7 +514,7 @@ class MediaFetcher(val context: Context) {
                 var dateTaken = cursor.getLongValue(Images.Media.DATE_TAKEN)
 
                 if (getProperDateTaken) {
-                    dateTaken = dateTakens.remove(path) ?: lastModified
+                    dateTaken = dateTakens[path] ?: lastModified
                 }
 
                 if (dateTaken == 0L) {

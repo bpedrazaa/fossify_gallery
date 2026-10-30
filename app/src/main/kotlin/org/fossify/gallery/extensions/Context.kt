@@ -200,43 +200,40 @@ fun Context.getSortedDirectories(source: ArrayList<Directory>): ArrayList<Direct
         return newDirsOrdered
     }
 
+    val isNameSorting = sorting and SORT_BY_NAME != 0
+    val isPathSorting = sorting and SORT_BY_PATH != 0
+    val isNumericSorting = sorting and SORT_USE_NUMERIC_VALUE != 0
+    val alphanumericComparator = AlphanumericComparator()
+    val sortKeys = HashMap<Directory, String>(dirs.size)
+    dirs.forEach { directory ->
+        directory.sortValue = when {
+            isNameSorting -> directory.name.lowercase(Locale.getDefault())
+            isPathSorting -> directory.path.lowercase(Locale.getDefault())
+            else -> directory.sortValue
+        }
+
+        sortKeys[directory] = when {
+            isNameSorting -> directory.sortValue.normalizeString().lowercase(Locale.getDefault())
+            isPathSorting -> directory.sortValue.lowercase(Locale.getDefault())
+            else -> directory.sortValue
+        }
+    }
+
     dirs.sortWith { o1, o2 ->
         o1 as Directory
         o2 as Directory
 
-        var result = when {
-            sorting and SORT_BY_NAME != 0 -> {
-                o1.sortValue = o1.name.lowercase(Locale.getDefault())
-                o2.sortValue = o2.name.lowercase(Locale.getDefault())
-
-                if (sorting and SORT_USE_NUMERIC_VALUE != 0) {
-                    AlphanumericComparator().compare(
-                        string1 = o1.sortValue.normalizeString().lowercase(Locale.getDefault()),
-                        string2 = o2.sortValue.normalizeString().lowercase(Locale.getDefault())
-                    )
-                } else {
-                    o1.sortValue.normalizeString().lowercase(Locale.getDefault())
-                        .compareTo(o2.sortValue.normalizeString().lowercase(Locale.getDefault()))
-                }
+        var result = if (isNameSorting || isPathSorting) {
+            val key1 = sortKeys[o1] ?: o1.sortValue
+            val key2 = sortKeys[o2] ?: o2.sortValue
+            if (isNumericSorting) {
+                alphanumericComparator.compare(string1 = key1, string2 = key2)
+            } else {
+                key1.compareTo(key2)
             }
-
-            sorting and SORT_BY_PATH != 0 -> {
-                o1.sortValue = o1.path.lowercase(Locale.getDefault())
-                o2.sortValue = o2.path.lowercase(Locale.getDefault())
-
-                if (sorting and SORT_USE_NUMERIC_VALUE != 0) {
-                    AlphanumericComparator().compare(
-                        string1 = o1.sortValue.lowercase(Locale.getDefault()),
-                        string2 = o2.sortValue.lowercase(Locale.getDefault())
-                    )
-                } else {
-                    o1.sortValue.lowercase(Locale.getDefault())
-                        .compareTo(o2.sortValue.lowercase(Locale.getDefault()))
-                }
-            }
-
+        } else {
             // SORT_BY_SIZE, SORT_BY_COUNT, SORT_BY_DATE_MODIFIED are numerical
-            else -> (o1.sortValue.toLongOrNull() ?: 0).compareTo(o2.sortValue.toLongOrNull() ?: 0)
+            (o1.sortValue.toLongOrNull() ?: 0).compareTo(o2.sortValue.toLongOrNull() ?: 0)
         }
 
         if (sorting and SORT_DESCENDING != 0) {

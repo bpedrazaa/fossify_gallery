@@ -111,7 +111,7 @@ class MediaAdapter(
     private val viewType = config.getFolderViewType(if (config.showAll) SHOW_ALL else path)
     private val isListViewType = viewType == VIEW_TYPE_LIST
     private var rotatedImagePaths = ArrayList<String>()
-    private var currentMediaHash = media.hashCode()
+    private var currentMedia: ArrayList<ThumbnailItem>? = media
     private val hasOTGConnected = activity.hasOTGConnected()
 
     private var scrollHorizontally = config.scrollHorizontally
@@ -610,7 +610,7 @@ class MediaAdapter(
                 listener?.tryDeleteFiles(fileDirItems, skipRecycleBin)
                 listener?.updateMediaGridDecoration(media)
                 removeSelectedItems(positions)
-                currentMediaHash = media.hashCode()
+                currentMedia = media
             }
         }
     }
@@ -625,8 +625,8 @@ class MediaAdapter(
 
     fun updateMedia(newMedia: ArrayList<ThumbnailItem>) {
         val thumbnailItems = newMedia.clone() as ArrayList<ThumbnailItem>
-        if (thumbnailItems.hashCode() != currentMediaHash) {
-            currentMediaHash = thumbnailItems.hashCode()
+        if (thumbnailItems != currentMedia) {
+            currentMedia = thumbnailItems
             media = thumbnailItems
             notifyDataSetChanged()
             finishActMode()

@@ -126,7 +126,7 @@ class DirectoryAdapter(
     private var animateGifs = config.animateGifs
     private var cropThumbnails = config.cropThumbnails
     private var groupDirectSubfolders = config.groupDirectSubfolders
-    private var currentDirectoriesHash = dirs.hashCode()
+    private var currentDirectories: ArrayList<Directory>? = snapshotDirectories(dirs)
     private var lockedFolderPaths = ArrayList<String>()
     private var isDragAndDropping = false
     private var startReorderDragListener: StartReorderDragListener? = null
@@ -465,7 +465,7 @@ class DirectoryAdapter(
                         notifyItemRemoved(it)
                     }
 
-                    currentDirectoriesHash = newDirs.hashCode()
+                    currentDirectories = snapshotDirectories(newDirs)
                     dirs = newDirs
 
                     finishActMode()
@@ -548,7 +548,7 @@ class DirectoryAdapter(
             config.removePinnedFolders(getSelectedPaths().toHashSet())
         }
 
-        currentDirectoriesHash = 0
+        currentDirectories = null
         pinnedFolders = config.pinnedFolders
         listener?.recheckPinnedFolders()
     }
@@ -811,8 +811,8 @@ class DirectoryAdapter(
 
     fun updateDirs(newDirs: ArrayList<Directory>) {
         val directories = newDirs.clone() as ArrayList<Directory>
-        if (directories.hashCode() != currentDirectoriesHash) {
-            currentDirectoriesHash = directories.hashCode()
+        if (directories != currentDirectories) {
+            currentDirectories = snapshotDirectories(directories)
             dirs = directories
             fillLockedFolders()
             notifyDataSetChanged()
@@ -1011,3 +1011,6 @@ class DirectoryAdapter(
         }
     }
 }
+
+private fun snapshotDirectories(directories: List<Directory>): ArrayList<Directory> =
+    ArrayList(directories.map { it.copy() })
