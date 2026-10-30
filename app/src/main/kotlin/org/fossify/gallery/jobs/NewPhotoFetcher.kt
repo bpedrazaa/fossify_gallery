@@ -7,7 +7,6 @@ import android.app.job.JobScheduler
 import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
-import android.database.Cursor
 import android.net.Uri
 import android.os.Handler
 import android.provider.MediaStore
@@ -61,51 +60,75 @@ class NewPhotoFetcher : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         mRunningParams = params
         ensureBackgroundThread {
-            val affectedFolderPaths = HashSet<String>()
-            if (params.triggeredContentAuthorities != null && params.triggeredContentUris != null) {
-                val ids = arrayListOf<String>()
-                for (uri in params.triggeredContentUris!!) {
-                    val path = uri.pathSegments
-                    if (path != null && (path.size == PHOTO_PATH_SEGMENTS.size + 1 || path.size == VIDEO_PATH_SEGMENTS.size + 1)) {
-                        ids.add(path[path.lastIndex])
-                    }
+            try {
+                getAffectedFolderPaths(params).forEach {
+                    updateDirectoryPath(it)
                 }
-
-                if (ids.isNotEmpty()) {
-                    val selection = StringBuilder()
-                    for (id in ids) {
-                        if (selection.isNotEmpty()) {
-                            selection.append(" OR ")
-                        }
-                        selection.append("${Images.ImageColumns._ID} = '$id'")
-                    }
-
-                    var cursor: Cursor? = null
-                    try {
-                        val projection = arrayOf(Images.ImageColumns.DATA)
-                        val uris = arrayListOf(Images.Media.EXTERNAL_CONTENT_URI, Video.Media.EXTERNAL_CONTENT_URI)
-                        uris.forEach {
-                            cursor = contentResolver.query(it, projection, selection.toString(), null, null)
-                            while (cursor!!.moveToNext()) {
-                                val path = cursor!!.getStringValue(Images.ImageColumns.DATA)
-                                affectedFolderPaths.add(path.getParentPath())
-                                addPathToDB(path)
-                            }
-                        }
-                    } catch (ignored: Exception) {
-                    } finally {
-                        cursor?.close()
-                    }
-                }
-            }
-
-            affectedFolderPaths.forEach {
-                updateDirectoryPath(it)
+            } finally {
+                mHandler.post(mWorker)
             }
         }
 
-        mHandler.post(mWorker)
         return true
+    }
+
+    private fun getAffectedFolderPaths(params: JobParameters): HashSet<String> {
+        val affectedFolderPaths = HashSet<String>()
+        val triggeredUris = params.triggeredContentUris ?: return affectedFolderPaths
+        if (params.triggeredContentAuthorities == null) {
+            return affectedFolderPaths
+        }
+
+        val ids = getTriggeredIds(triggeredUris)
+        if (ids.isEmpty()) {
+            return affectedFolderPaths
+        }
+
+        val selection = getMediaSelection(ids)
+        val projection = arrayOf(Images.ImageColumns.DATA)
+        val uris = arrayListOf(Images.Media.EXTERNAL_CONTENT_URI, Video.Media.EXTERNAL_CONTENT_URI)
+        uris.forEach { uri ->
+            addAffectedPaths(uri, projection, selection, affectedFolderPaths)
+        }
+
+        return affectedFolderPaths
+    }
+
+    private fun getTriggeredIds(uris: Array<Uri>): ArrayList<String> {
+        val ids = arrayListOf<String>()
+        for (uri in uris) {
+            val path = uri.pathSegments ?: continue
+            val isPhoto = path.size == PHOTO_PATH_SEGMENTS.size + 1
+            val isVideo = path.size == VIDEO_PATH_SEGMENTS.size + 1
+            if (isPhoto || isVideo) {
+                ids.add(path[path.lastIndex])
+            }
+        }
+        return ids
+    }
+
+    private fun getMediaSelection(ids: ArrayList<String>): String {
+        val selection = StringBuilder()
+        for (id in ids) {
+            if (selection.isNotEmpty()) {
+                selection.append(" OR ")
+            }
+            selection.append("${Images.ImageColumns._ID} = '$id'")
+        }
+        return selection.toString()
+    }
+
+    private fun addAffectedPaths(uri: Uri, projection: Array<String>, selection: String, into: HashSet<String>) {
+        try {
+            contentResolver.query(uri, projection, selection, null, null)?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val path = cursor.getStringValue(Images.ImageColumns.DATA)
+                    into.add(path.getParentPath())
+                    addPathToDB(path)
+                }
+            }
+        } catch (ignored: Exception) {
+        }
     }
 
     override fun onStopJob(params: JobParameters): Boolean {
