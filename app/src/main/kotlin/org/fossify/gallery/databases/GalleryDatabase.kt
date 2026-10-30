@@ -23,6 +23,7 @@ abstract class GalleryDatabase : RoomDatabase() {
     abstract fun FavoritesDao(): FavoritesDao
 
     companion object {
+        @Volatile
         private var db: GalleryDatabase? = null
 
         fun getInstance(context: Context): GalleryDatabase {
@@ -42,13 +43,6 @@ abstract class GalleryDatabase : RoomDatabase() {
                 }
             }
             return db!!
-        }
-
-        fun destroyInstance() {
-            if (db?.isOpen == true) {
-                db?.close()
-            }
-            db = null
         }
 
         private val MIGRATION_4_5 = object : Migration(4, 5) {

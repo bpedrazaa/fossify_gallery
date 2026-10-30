@@ -57,7 +57,6 @@ import org.fossify.commons.views.MyRecyclerView
 import org.fossify.gallery.R
 import org.fossify.gallery.adapters.MediaAdapter
 import org.fossify.gallery.asynctasks.GetMediaAsynctask
-import org.fossify.gallery.databases.GalleryDatabase
 import org.fossify.gallery.databinding.ActivityMediaBinding
 import org.fossify.gallery.dialogs.ChangeGroupingDialog
 import org.fossify.gallery.dialogs.ChangeSortingDialog
@@ -299,7 +298,6 @@ class MediaActivity : SimpleActivity(), MediaOperationsListener {
             config.tempSkipDeleteConfirmation = false
             config.tempSkipRecycleBin = false
             unregisterFileUpdateListener()
-            GalleryDatabase.destroyInstance()
         }
 
         mTempShowHiddenHandler.removeCallbacksAndMessages(null)

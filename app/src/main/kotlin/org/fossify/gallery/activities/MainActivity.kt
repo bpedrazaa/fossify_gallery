@@ -80,7 +80,6 @@ import org.fossify.commons.views.MyRecyclerView
 import org.fossify.gallery.BuildConfig
 import org.fossify.gallery.R
 import org.fossify.gallery.adapters.DirectoryAdapter
-import org.fossify.gallery.databases.GalleryDatabase
 import org.fossify.gallery.databinding.ActivityMainBinding
 import org.fossify.gallery.dialogs.ChangeSortingDialog
 import org.fossify.gallery.dialogs.ChangeViewTypeDialog
@@ -398,7 +397,6 @@ class MainActivity : SimpleActivity(), DirectoryOperationsListener {
 
             if (!config.showAll) {
                 mLastMediaFetcher?.shouldStop = true
-                GalleryDatabase.destroyInstance()
             }
         }
     }
