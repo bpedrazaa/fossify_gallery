@@ -119,6 +119,7 @@ import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
 import kotlin.math.min
 
@@ -677,6 +678,67 @@ fun Context.getPathLocation(path: String): Int {
     }
 }
 
+private data class ImageOptionsKey(
+    val cropThumbnails: Boolean,
+    val roundCorners: Int,
+    val skipMemoryCache: Boolean,
+    val decodeAsDrawable: Boolean
+)
+
+private val imageOptionsCache = ConcurrentHashMap<ImageOptionsKey, RequestOptions>()
+
+private fun Context.getImageOptions(key: ImageOptionsKey): RequestOptions {
+    return imageOptionsCache.computeIfAbsent(key) { buildImageOptions(it) }
+}
+
+private fun Context.buildImageOptions(key: ImageOptionsKey): RequestOptions {
+    val options = RequestOptions()
+        .skipMemoryCache(key.skipMemoryCache)
+        .priority(Priority.LOW)
+        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+        .format(DecodeFormat.PREFER_ARGB_8888)
+
+    if (key.cropThumbnails) {
+        options.optionalTransform(CenterCrop())
+        options.optionalTransform(
+            WebpDrawable::class.java,
+            WebpDrawableTransformation(CenterCrop())
+        )
+    } else {
+        options.optionalTransform(FitCenter())
+        options.optionalTransform(WebpDrawable::class.java, WebpDrawableTransformation(FitCenter()))
+    }
+
+    if (key.decodeAsDrawable) {
+        // this is required to make glide cache aware of changes
+        options.decode(Drawable::class.java)
+    } else {
+        options.dontAnimate()
+        // don't animate is not enough for webp files, decode as bitmap forces first frame use in animated webps
+        options.decode(Bitmap::class.java)
+    }
+
+    if (key.roundCorners != ROUNDED_CORNERS_NONE) {
+        val cornerSize = if (key.roundCorners == ROUNDED_CORNERS_SMALL) {
+            org.fossify.commons.R.dimen.rounded_corner_radius_small
+        } else {
+            org.fossify.commons.R.dimen.rounded_corner_radius_big
+        }
+        val cornerRadius = resources.getDimension(cornerSize).toInt()
+        val roundedCornersTransform = RoundedCorners(cornerRadius)
+        options.optionalTransform(MultiTransformation(CenterCrop(), roundedCornersTransform))
+        options.optionalTransform(
+            WebpDrawable::class.java,
+            MultiTransformation(
+                WebpDrawableTransformation(CenterCrop()),
+                WebpDrawableTransformation(roundedCornersTransform)
+            )
+        )
+    }
+
+    return options
+}
+
 @SuppressLint("CheckResult")
 fun Context.loadImageBase(
     path: String,
@@ -690,53 +752,22 @@ fun Context.loadImageBase(
     crossFadeDuration: Int = THUMBNAIL_FADE_DURATION_MS,
     onError: (() -> Unit)? = null
 ) {
-    val options = RequestOptions()
-        .signature(signature)
-        .skipMemoryCache(skipMemoryCacheAtPaths?.contains(path) == true)
-        .priority(Priority.LOW)
-        .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
-        .format(DecodeFormat.PREFER_ARGB_8888)
-
-    if (cropThumbnails) {
-        options.optionalTransform(CenterCrop())
-        options.optionalTransform(
-            WebpDrawable::class.java,
-            WebpDrawableTransformation(CenterCrop())
-        )
-    } else {
-        options.optionalTransform(FitCenter())
-        options.optionalTransform(WebpDrawable::class.java, WebpDrawableTransformation(FitCenter()))
-    }
-
     // animation is only supported without rounded corners and the file must be a GIF or WEBP.
-    if (animate && roundCorners == ROUNDED_CORNERS_NONE && (path.isGif() || path.isWebP())) {
-        // this is required to make glide cache aware of changes
-        options.decode(Drawable::class.java)
-    } else {
-        options.dontAnimate()
-        // don't animate is not enough for webp files, decode as bitmap forces first frame use in animated webps
-        options.decode(Bitmap::class.java)
-    }
-
-    if (roundCorners != ROUNDED_CORNERS_NONE) {
-        val cornerSize =
-            if (roundCorners == ROUNDED_CORNERS_SMALL) org.fossify.commons.R.dimen.rounded_corner_radius_small else org.fossify.commons.R.dimen.rounded_corner_radius_big
-        val cornerRadius = resources.getDimension(cornerSize).toInt()
-        val roundedCornersTransform = RoundedCorners(cornerRadius)
-        options.optionalTransform(MultiTransformation(CenterCrop(), roundedCornersTransform))
-        options.optionalTransform(
-            WebpDrawable::class.java,
-            MultiTransformation(
-                WebpDrawableTransformation(CenterCrop()),
-                WebpDrawableTransformation(roundedCornersTransform)
-            )
+    val useDrawableDecode = animate && roundCorners == ROUNDED_CORNERS_NONE && (path.isGif() || path.isWebP())
+    val options = getImageOptions(
+        ImageOptionsKey(
+            cropThumbnails = cropThumbnails,
+            roundCorners = roundCorners,
+            skipMemoryCache = skipMemoryCacheAtPaths?.contains(path) == true,
+            decodeAsDrawable = useDrawableDecode
         )
-    }
+    )
 
     WebpBitmapFactory.sUseSystemDecoder = false // CVE-2023-4863
     var builder = Glide.with(applicationContext)
         .load(path)
         .apply(options)
+        .signature(signature)
         .set(WebpDownsampler.USE_SYSTEM_DECODER, false) // CVE-2023-4863
         .transition(getOptionalCrossFadeTransition(crossFadeDuration))
 

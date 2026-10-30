@@ -30,6 +30,8 @@ data class Medium(
     @Ignore var gridPosition: Int = 0   // used at grid view decoration at Grouping enabled
 ) : Serializable, ThumbnailItem() {
 
+    @Ignore var cachedLastModified: Long = -1
+
     constructor() : this(null, "", "", "", 0L, 0L, 0L, 0, 0, false, 0L, 0L, 0)
 
     companion object {
@@ -102,7 +104,10 @@ data class Medium(
         val lastModified = if (modified > 1) {
             modified
         } else {
-            File(path).lastModified()
+            if (cachedLastModified < 0) {
+                cachedLastModified = File(path).lastModified()
+            }
+            cachedLastModified
         }
 
         return "$path-$lastModified-$size"
