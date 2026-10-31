@@ -121,7 +121,6 @@ import java.nio.channels.FileChannel
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
-import kotlin.math.min
 
 val Context.audioManager get() = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
@@ -299,22 +298,16 @@ fun Context.getDirsToShow(
     }
 }
 
+private fun pickNewestThumbnail(subDirs: List<Directory>): String {
+    return subDirs.maxByOrNull { maxOf(it.modified, it.taken) }?.tmb ?: ""
+}
+
 private fun Context.addParentWithoutMediaFiles(into: ArrayList<Directory>, path: String): Boolean {
-    val isSortingAscending = config.sorting.isSortingAscending()
     val subDirs = into.filter { File(it.path).parent.equals(path, true) } as ArrayList<Directory>
     val newDirId = max(1000L, into.maxOf { it.id ?: 0L })
     if (subDirs.isNotEmpty()) {
-        val lastModified = if (isSortingAscending) {
-            subDirs.minByOrNull { it.modified }?.modified
-        } else {
-            subDirs.maxByOrNull { it.modified }?.modified
-        } ?: 0
-
-        val dateTaken = if (isSortingAscending) {
-            subDirs.minByOrNull { it.taken }?.taken
-        } else {
-            subDirs.maxByOrNull { it.taken }?.taken
-        } ?: 0
+        val lastModified = subDirs.maxByOrNull { it.modified }?.modified ?: 0
+        val dateTaken = subDirs.maxByOrNull { it.taken }?.taken ?: 0
 
         var mediaTypes = 0
         subDirs.forEach {
@@ -324,7 +317,7 @@ private fun Context.addParentWithoutMediaFiles(into: ArrayList<Directory>, path:
         val directory = Directory(
             id = newDirId + 1,
             path = path,
-            tmb = subDirs.first().tmb,
+            tmb = pickNewestThumbnail(subDirs),
             name = getFolderNameFromPath(path),
             mediaCnt = subDirs.sumOf { it.mediaCnt },
             modified = lastModified,
@@ -1267,6 +1260,24 @@ fun Context.addPathToDB(path: String) {
     }
 }
 
+private fun Context.getFolderThumbnail(
+    path: String,
+    grouped: List<ThumbnailItem>,
+    albumCovers: List<AlbumCover>,
+    otgPath: String
+): String {
+    albumCovers.lastOrNull { it.path == path && getDoesFilePathExist(it.tmb, otgPath) }?.let {
+        return it.tmb
+    }
+
+    val newest = grouped.filterIsInstance<Medium>().maxByOrNull { maxOf(it.modified, it.taken) }
+    if (newest != null && getDoesFilePathExist(newest.path, otgPath)) {
+        return newest.path
+    }
+
+    return grouped.filterIsInstance<Medium>().firstOrNull { getDoesFilePathExist(it.path, otgPath) }?.path ?: ""
+}
+
 fun Context.createDirectoryFromMedia(
     path: String,
     curMedia: ArrayList<Medium>,
@@ -1278,39 +1289,14 @@ fun Context.createDirectoryFromMedia(
 ): Directory {
     val OTGPath = config.OTGPath
     val grouped = MediaFetcher(this).groupMedia(curMedia, path)
-    var thumbnail: String? = null
-
-    albumCovers.forEach {
-        if (it.path == path && getDoesFilePathExist(it.tmb, OTGPath)) {
-            thumbnail = it.tmb
-        }
+    var thumbnail = getFolderThumbnail(path, grouped, albumCovers, OTGPath)
+    if (config.OTGPath.isNotEmpty() && thumbnail.startsWith(config.OTGPath)) {
+        thumbnail = thumbnail.getOTGPublicPath(applicationContext)
     }
 
-    if (thumbnail == null) {
-        val sortedMedia = grouped.filter { it is Medium }.toMutableList() as ArrayList<Medium>
-        thumbnail = sortedMedia.firstOrNull { getDoesFilePathExist(it.path, OTGPath) }?.path ?: ""
-    }
-
-    if (config.OTGPath.isNotEmpty() && thumbnail!!.startsWith(config.OTGPath)) {
-        thumbnail = thumbnail!!.getOTGPublicPath(applicationContext)
-    }
-
-    val isSortingAscending = config.directorySorting.isSortingAscending()
-    val defaultMedium = Medium(0, "", "", "", 0L, 0L, 0L, 0, 0, false, 0L, 0L)
-    val firstItem = curMedia.firstOrNull() ?: defaultMedium
-    val lastItem = curMedia.lastOrNull() ?: defaultMedium
     val dirName = checkAppendingHidden(path, hiddenString, includedFolders, noMediaFolders)
-    val lastModified = if (isSortingAscending) {
-        min(firstItem.modified, lastItem.modified)
-    } else {
-        max(firstItem.modified, lastItem.modified)
-    }
-
-    val dateTaken = if (isSortingAscending) {
-        min(firstItem.taken, lastItem.taken)
-    } else {
-        max(firstItem.taken, lastItem.taken)
-    }
+    val lastModified = curMedia.maxOfOrNull { it.modified } ?: 0L
+    val dateTaken = curMedia.maxOfOrNull { it.taken } ?: 0L
 
     val size = if (getProperFileSize) curMedia.sumByLong { it.size } else 0L
     val mediaTypes = curMedia.getDirMediaTypes()
@@ -1319,7 +1305,7 @@ fun Context.createDirectoryFromMedia(
     return Directory(
         id = null,
         path = path,
-        tmb = thumbnail!!,
+        tmb = thumbnail,
         name = dirName,
         mediaCnt = curMedia.size,
         modified = lastModified,
@@ -1391,7 +1377,6 @@ fun Context.createNavigationDir(path: String, allDirs: ArrayList<Directory>): Di
     }
 
     val dir = allDirs.firstOrNull { it.path.equals(path, true) } ?: run {
-        val base = mediaUnder.first()
         val name = getFolderNameFromPath(path)
         val size = mediaUnder.sumOf { it.size }
         val count = mediaUnder.sumOf { it.mediaCnt }
@@ -1400,7 +1385,7 @@ fun Context.createNavigationDir(path: String, allDirs: ArrayList<Directory>): Di
         Directory(
             id = null,
             path = path,
-            tmb = base.tmb,
+            tmb = pickNewestThumbnail(mediaUnder),
             name = name,
             mediaCnt = count,
             modified = modified,
