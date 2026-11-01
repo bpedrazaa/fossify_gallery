@@ -8,6 +8,7 @@ import androidx.activity.addCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.RecyclerView
 import org.fossify.commons.activities.BaseSimpleActivity
+import org.fossify.commons.dialogs.CreateNewFolderDialog
 import org.fossify.commons.dialogs.FilePickerDialog
 import org.fossify.commons.extensions.beGone
 import org.fossify.commons.extensions.beInvisible
@@ -68,6 +69,7 @@ class PickDirectoryDialog(
     private var showExcluded = activity.config.temporarilyShowExcluded
     private var isLoading = false
     private var isTapInFlight = false
+    private var pendingScrollPath: String? = null
     private var currentPathPrefix = ""
     private val config = activity.config
     private val searchView = binding.folderSearchView
@@ -81,6 +83,15 @@ class PickDirectoryDialog(
         }
 
         binding.directoriesFastscroller.updateColors(activity.getProperPrimaryColor())
+        binding.directoriesCreateFolder.setOnClickListener {
+            val parentPath = currentPathPrefix
+            if (parentPath.isNotEmpty()) {
+                CreateNewFolderDialog(activity, parentPath) { newPath ->
+                    pendingScrollPath = newPath
+                    gotDirectories(allDirectories)
+                }
+            }
+        }
 
         configureSearchView()
 
@@ -308,11 +319,20 @@ class PickDirectoryDialog(
             directoriesFastscroller.setScrollVertically(!scrollHorizontally)
         }
 
+        pendingScrollPath?.let { newPath ->
+            pendingScrollPath = null
+            val index = dirs.indexOfFirst { it.path.equals(newPath, true) }
+            if (index >= 0) {
+                binding.directoriesGrid.scrollToPosition(index)
+            }
+        }
+
         checkPlaceholderVisibility(dirs)
         configureConfirmButton()
     }
 
     private fun configureConfirmButton() {
+        binding.directoriesCreateFolder.beVisibleIf(currentPathPrefix.isNotEmpty())
         val button = dialog?.getButton(AlertDialog.BUTTON_POSITIVE) ?: return
         val enabled = currentPathPrefix.isNotEmpty()
         button.isEnabled = enabled

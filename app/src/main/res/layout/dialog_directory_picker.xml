@@ -51,6 +51,16 @@
     </RelativeLayout>
 
     <org.fossify.commons.views.MyFloatingActionButton
+        android:id="@+id/directories_create_folder"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="@dimen/activity_margin"
+        android:contentDescription="@string/create_new_folder"
+        android:src="@drawable/ic_plus_vector"
+        android:visibility="gone" />
+
+    <org.fossify.commons.views.MyFloatingActionButton
         android:id="@+id/directories_show_hidden"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
