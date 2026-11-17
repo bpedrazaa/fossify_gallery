@@ -27,6 +27,11 @@ JPEG, JPEG XL, PNG, MP4, MKV, RAW, SVG, GIF, AVIF, videos, and more – we've go
 **✨ MATERIAL DESIGN WITH DYNAMIC THEMES:**  
 Experience the beauty of intuitive material design with dynamic themes. Want more? Dive into custom themes and make your gallery truly unique.
 
+**🍴 FORK ADDITIONS:**  
+This fork installs as **Gallery Mod** next to the official app, with two additions on top of upstream:
+- "Make square" in the viewer pads a still photo to a square with black and saves a copy beside the original.
+- The folder grid centers its last row, for any column count.
+
 ➡️ Explore more Fossify apps: https://www.fossify.org<br>
 ➡️ Open-Source Code: https://www.github.com/FossifyOrg<br>
 ➡️ Join the community on Reddit: https://www.reddit.com/r/Fossify<br>

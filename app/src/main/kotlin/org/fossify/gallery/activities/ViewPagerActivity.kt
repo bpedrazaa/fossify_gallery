@@ -17,6 +17,8 @@ import android.content.pm.ShortcutInfo
 import android.content.pm.ShortcutManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.Icon
 import android.os.Bundle
@@ -181,6 +183,7 @@ import org.fossify.gallery.helpers.getPermissionToRequest
 import org.fossify.gallery.models.Medium
 import org.fossify.gallery.models.ThumbnailItem
 import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.min
 
 @Suppress("UNCHECKED_CAST")
@@ -188,6 +191,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
     companion object {
         private const val REQUEST_VIEW_VIDEO = 1
         private const val SAVED_PATH = "current_path"
+        private const val MAX_SQUARE_SIDE = 4096
     }
 
     private var mPath = ""
@@ -298,6 +302,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 findItem(R.id.menu_rotate).isVisible = currentMedium.isImage() && visibleBottomActions and BOTTOM_ACTION_ROTATE == 0
                 findItem(R.id.menu_set_as).isVisible = visibleBottomActions and BOTTOM_ACTION_SET_AS == 0
                 findItem(R.id.menu_copy_to_clipboard).isVisible = currentMedium.isImage()
+                findItem(R.id.menu_make_square).isVisible = currentMedium.isImage()
                 findItem(R.id.menu_copy_to).isVisible = visibleBottomActions and BOTTOM_ACTION_COPY == 0
                 findItem(R.id.menu_move_to).isVisible = visibleBottomActions and BOTTOM_ACTION_MOVE == 0
                 findItem(R.id.menu_save_as).isVisible = rotationDegrees != 0
@@ -359,6 +364,7 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 R.id.menu_rename -> checkMediaManagementAndRename()
                 R.id.menu_print -> printFile()
                 R.id.menu_edit -> openEditor(getCurrentPath())
+                R.id.menu_make_square -> makeSquareCopy()
                 R.id.menu_properties -> showProperties()
                 R.id.menu_show_on_map -> showFileOnMap(getCurrentPath())
                 R.id.menu_rotate_right -> rotateImage(90)
@@ -872,6 +878,103 @@ class ViewPagerActivity : BaseViewerActivity(), ViewPager.OnPageChangeListener, 
                 }
             }
         }
+    }
+
+    private fun makeSquareCopy() {
+        val path = getCurrentPath()
+        if (path.isEmpty()) {
+            return
+        }
+
+        if (needsStupidWritePermissions(path)) {
+            handleSAFDialog(path) {
+                if (it) {
+                    saveSquareCopy(path)
+                }
+            }
+        } else {
+            saveSquareCopy(path)
+        }
+    }
+
+    private fun saveSquareCopy(path: String) {
+        toast(org.fossify.commons.R.string.saving)
+        ensureBackgroundThread {
+            try {
+                val square = decodeSquareBitmap(path)
+                if (square == null) {
+                    toast(R.string.image_editing_failed)
+                    return@ensureBackgroundThread
+                }
+
+                val output = createSquareFile(File(path))
+                if (output == null) {
+                    toast(R.string.image_editing_failed)
+                    return@ensureBackgroundThread
+                }
+
+                val (file, format) = output
+                FileOutputStream(file).use {
+                    square.compress(format, 90, it)
+                }
+                square.recycle()
+
+                rescanPaths(arrayListOf(file.absolutePath)) {
+                    runOnUiThread {
+                        toast(org.fossify.commons.R.string.file_saved)
+                    }
+                }
+            } catch (e: Exception) {
+                showErrorToast(e)
+            } catch (_: OutOfMemoryError) {
+                toast(org.fossify.commons.R.string.out_of_memory_error)
+            }
+        }
+    }
+
+    private fun decodeSquareBitmap(path: String): Bitmap? {
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, options)
+        val maxSourceSide = maxOf(options.outWidth, options.outHeight)
+        val targetSize = if (maxSourceSide > MAX_SQUARE_SIDE) MAX_SQUARE_SIDE else Target.SIZE_ORIGINAL
+        val bitmap = Glide.with(applicationContext)
+            .asBitmap()
+            .load(path)
+            .apply(RequestOptions().disallowHardwareConfig())
+            .submit(targetSize, targetSize)
+            .get()
+
+        val side = maxOf(bitmap.width, bitmap.height)
+        val square = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+        Canvas(square).apply {
+            drawColor(Color.BLACK)
+            drawBitmap(bitmap, (side - bitmap.width) / 2f, (side - bitmap.height) / 2f, null)
+        }
+        return square
+    }
+
+    private fun createSquareFile(source: File): Pair<File, Bitmap.CompressFormat>? {
+        val parent = source.parentFile ?: return null
+        val extension = source.extension.lowercase()
+        val outputExtension = when (extension) {
+            "png" -> "png"
+            "webp" -> "webp"
+            else -> "jpg"
+        }
+        val format = when (outputExtension) {
+            "png" -> Bitmap.CompressFormat.PNG
+            "webp" -> Bitmap.CompressFormat.WEBP
+            else -> Bitmap.CompressFormat.JPEG
+        }
+
+        val baseName = "${source.nameWithoutExtension}_square"
+        var output = File(parent, "$baseName.$outputExtension")
+        var index = 2
+        while (output.exists()) {
+            output = File(parent, "${baseName}_$index.$outputExtension")
+            index++
+        }
+        return output to format
     }
 
     private fun createShortcut() {

@@ -91,6 +91,10 @@
         android:title="@string/edit"
         app:showAsAction="ifRoom" />
     <item
+        android:id="@+id/menu_make_square"
+        android:title="@string/make_square"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/menu_add_to_favorites"
         android:icon="@drawable/ic_star_outline_vector"
         android:title="@string/add_to_favorites"
